@@ -21,6 +21,65 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown(
+    """
+    <style>
+    :root {
+        --slate: #43546d;
+        --slate-dark: #2e3b4f;
+        --ice: #e9eef5;
+        --ink: #172033;
+        --blue: #4d78a8;
+        --green: #2f855a;
+        --amber: #c58a18;
+        --red: #c65353;
+    }
+    .stApp { background: #f5f7fa; color: var(--ink); }
+    .block-container { max-width: 1500px; padding-top: 1.25rem; padding-bottom: 3rem; }
+    .mc-hero {
+        background: linear-gradient(125deg, var(--slate-dark), var(--slate) 62%, #62738b);
+        border: 1px solid #718096;
+        border-radius: 8px;
+        padding: 1.6rem 2rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 8px 22px rgba(35, 48, 68, .16);
+    }
+    .mc-hero h1 { color: white; font-size: 2.05rem; font-weight: 500; margin: 0; letter-spacing: .035em; }
+    .mc-hero p { color: #e8eef6; margin: .45rem 0 0; font-size: 1rem; }
+    .mc-ribbon {
+        background: var(--slate);
+        color: white;
+        border-radius: 6px;
+        padding: .72rem 1rem;
+        margin: .35rem 0 1rem;
+        font-size: 1.05rem;
+        letter-spacing: .02em;
+    }
+    div[data-testid="stMetric"] {
+        background: white;
+        border: 1px solid #dbe2ea;
+        border-top: 4px solid var(--slate);
+        border-radius: 7px;
+        padding: .85rem 1rem;
+        min-height: 128px;
+        box-shadow: 0 4px 14px rgba(38, 51, 69, .07);
+    }
+    div[data-testid="stMetricLabel"] { color: #5b6677; font-weight: 600; }
+    div[data-testid="stMetricValue"] { color: var(--ink); }
+    div[data-testid="stTabs"] button { font-weight: 600; }
+    div[data-testid="stDataFrame"] { border: 1px solid #d7dee8; border-radius: 6px; }
+    .mc-note {
+        background: #eef3f8;
+        border-left: 4px solid var(--blue);
+        border-radius: 4px;
+        padding: .8rem 1rem;
+        margin: .4rem 0 1rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 DEFAULT_PRODUCTS = pd.DataFrame([
     {
@@ -141,10 +200,14 @@ def format_currency(value: float) -> str:
     return f"S/ {value:,.2f}"
 
 
-st.title("📦 Simulacion Monte Carlo para Gestion de Inventarios")
-st.caption(
-    "Evalua si el stock determinado soporta la demanda estocastica y compara "
-    "las politicas (Q,s), (T,S) y (s,S) bajo variabilidad de demanda y lead time."
+st.markdown(
+    """
+    <div class="mc-hero">
+      <h1>SIMULACIÓN MONTE CARLO · GESTIÓN DE INVENTARIOS</h1>
+      <p>Evaluación estocástica de stock, nivel de servicio, riesgo y costo de las políticas (Q,s), (T,S) y (s,S).</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 with st.expander("Como interpreta el modelo", expanded=False):
@@ -296,105 +359,205 @@ if "results" in st.session_state:
     trajectories = results["trayectorias"]
 
     st.divider()
-    st.subheader("3. Resultados: ¿el stock determinado es suficiente?")
-    selected_product = st.selectbox("Producto para el analisis visual", stock["Producto"].tolist())
+    st.markdown('<div class="mc-ribbon">TABLERO EJECUTIVO DE LA SIMULACIÓN</div>', unsafe_allow_html=True)
+    selector_col, scope_col = st.columns([2, 3])
+    with selector_col:
+        selected_product = st.selectbox("Producto analizado", stock["Producto"].tolist())
+    with scope_col:
+        st.markdown(
+            f"<div class='mc-note'><b>Escenario:</b> {settings.replications:,} iteraciones · "
+            f"{settings.horizon_days} días · objetivo de servicio {settings.target_probability:.1%} · "
+            f"protección sin reposición {settings.protection_days} días.</div>",
+            unsafe_allow_html=True,
+        )
+
     selected_stock = stock[stock["Producto"] == selected_product].iloc[0]
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Probabilidad de cobertura", format_percent(selected_stock["Probabilidad_cobertura"]))
-    m2.metric("Stock evaluado", f"{selected_stock['Stock_evaluado']:.0f} u.")
-    m3.metric(
-        f"Stock requerido al {settings.target_probability:.1%}",
+    product_comparison = comparison[comparison["Producto"] == selected_product].copy()
+    recommended = product_comparison[product_comparison["Recomendada"]]
+    best = recommended.iloc[0] if not recommended.empty else product_comparison.iloc[0]
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(
+        "Cobertura del stock definido",
+        format_percent(selected_stock["Probabilidad_cobertura"]),
+        delta=f"{selected_stock['Probabilidad_cobertura'] - settings.target_probability:+.1%} vs objetivo",
+    )
+    k2.metric(
+        "Stock requerido",
         f"{selected_stock['Stock_recomendado_objetivo']:.0f} u.",
         delta=f"Brecha {selected_stock['Brecha_stock']:+.0f} u.",
         delta_color="normal",
     )
-    m4.metric("Diagnostico", selected_stock["Evaluacion"])
-
-    if selected_stock["Evaluacion"] == "Suficiente":
-        st.success(
-            f"El stock de {selected_stock['Stock_evaluado']:.0f} unidades alcanza o supera "
-            f"el nivel objetivo durante {settings.protection_days} dias."
-        )
-    else:
-        st.warning(
-            f"El stock tiene una probabilidad de cobertura de "
-            f"{selected_stock['Probabilidad_cobertura']:.1%}. Para alcanzar el objetivo de "
-            f"{settings.target_probability:.1%}, el modelo estima "
-            f"{selected_stock['Stock_recomendado_objetivo']:.0f} unidades."
-        )
-
-    st.dataframe(
-        stock.style.format({
-            "Probabilidad_cobertura": "{:.1%}",
-            "Fill_rate_sin_reposicion": "{:.1%}",
-            "Demanda_promedio_periodo": "{:.1f}",
-            "Demanda_p95_periodo": "{:.1f}",
-            "Dia_promedio_quiebre": "{:.1f}",
-        }),
-        use_container_width=True,
-        hide_index=True,
+    k3.metric(
+        f"Servicio con {best['Politica']}",
+        format_percent(best["Nivel_servicio_unidades"]),
+        delta=f"{best['Brecha_nivel_servicio']:+.1%} vs objetivo",
     )
+    k4.metric(
+        "Costo relevante esperado",
+        format_currency(best["Costo_relevante_promedio"]),
+        delta=f"CVaR 95% {format_currency(best['Costo_relevante_CVaR95'])}",
+        delta_color="off",
+    )
+
+    criterion = (
+        "cumple el objetivo y minimiza el costo relevante"
+        if bool(best["Cumple_objetivo"])
+        else "alcanza el mayor nivel de servicio entre los escenarios evaluados"
+    )
+    st.info(
+        f"**Decisión sugerida:** aplicar **{POLICY_LABELS[best['Politica']]}** para "
+        f"**{selected_product}**, porque {criterion}. El stock inicial es "
+        f"**{selected_stock['Evaluacion'].lower()}** para el periodo de protección."
+    )
+
+    tab_summary, tab_risk, tab_cost, tab_detail = st.tabs([
+        "Resumen ejecutivo",
+        "Riesgo y variabilidad",
+        "Costos y políticas",
+        "Indicadores y trazabilidad",
+    ])
 
     percentiles = results["percentiles_demanda"]
     chart_percentiles = percentiles[percentiles["Producto"] == selected_product].set_index("Percentil")
-    st.caption("Demanda acumulada simulada por percentil")
-    st.bar_chart(chart_percentiles["Demanda_acumulada"], use_container_width=True)
-
-    st.subheader("4. Comparacion de politicas y costos")
-    product_comparison = comparison[comparison["Producto"] == selected_product].copy()
-    recommended = product_comparison[product_comparison["Recomendada"]]
-    if not recommended.empty:
-        best = recommended.iloc[0]
-        criterion = "cumple el nivel objetivo y minimiza el costo relevante" if best["Cumple_objetivo"] else "logra el mayor servicio entre los escenarios evaluados"
-        st.info(
-            f"Politica recomendada para **{selected_product}: {POLICY_LABELS[best['Politica']]}**, "
-            f"porque {criterion}. Costo relevante promedio: "
-            f"**{format_currency(best['Costo_relevante_promedio'])}**."
-        )
-
-    display_comparison = product_comparison.copy()
-    display_comparison["Politica"] = display_comparison["Politica"].map(POLICY_LABELS)
-    st.dataframe(
-        display_comparison.style.format({
-            "Nivel_servicio_unidades": "{:.2%}",
-            "Dias_sin_quiebre": "{:.2%}",
-            "Probabilidad_servicio_objetivo": "{:.2%}",
-            "Inventario_promedio": "{:.1f}",
-            "Unidades_no_atendidas": "{:.1f}",
-            "Eventos_quiebre": "{:.1f}",
-            "Ordenes_promedio": "{:.1f}",
-            "Costo_mantenimiento_promedio": "S/ {:,.2f}",
-            "Costo_ordenamiento_promedio": "S/ {:,.2f}",
-            "Costo_quiebre_promedio": "S/ {:,.2f}",
-            "Costo_compras_promedio": "S/ {:,.2f}",
-            "Costo_relevante_promedio": "S/ {:,.2f}",
-            "Costo_total_promedio": "S/ {:,.2f}",
-            "Costo_total_p95": "S/ {:,.2f}",
-        }),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    chart_col1, chart_col2 = st.columns(2)
-    with chart_col1:
-        st.caption("Nivel de servicio por politica")
-        service_chart = product_comparison.set_index("Politica")[["Nivel_servicio_unidades"]]
-        st.bar_chart(service_chart, use_container_width=True)
-    with chart_col2:
-        st.caption("Costo relevante promedio por politica")
-        cost_chart = product_comparison.set_index("Politica")[["Costo_relevante_promedio"]]
-        st.bar_chart(cost_chart, use_container_width=True)
-
-    st.caption("Trayectoria promedio del inventario disponible")
     trajectory_chart = trajectories[trajectories["Producto"] == selected_product].pivot(
         index="Dia", columns="Politica", values="Inventario_promedio"
     )
-    st.line_chart(trajectory_chart, use_container_width=True)
+
+    with tab_summary:
+        left_chart, right_chart = st.columns(2)
+        with left_chart:
+            st.markdown("#### Demanda acumulada por percentil")
+            st.bar_chart(chart_percentiles["Demanda_acumulada"], color="#4d78a8", use_container_width=True)
+            st.caption(
+                "El percentil seleccionado traduce la incertidumbre de demanda en el stock "
+                "necesario para el periodo de protección."
+            )
+        with right_chart:
+            st.markdown("#### Frontera costo–servicio")
+            st.scatter_chart(
+                product_comparison,
+                x="Costo_relevante_promedio",
+                y="Nivel_servicio_unidades",
+                color="Politica",
+                size="Inventario_promedio",
+                use_container_width=True,
+            )
+            st.caption("La alternativa dominante combina mayor servicio con menor costo controlable.")
+
+        st.markdown("#### Trayectoria promedio del inventario disponible")
+        st.line_chart(trajectory_chart, use_container_width=True)
+
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Stock de seguridad sugerido", f"{selected_stock['Stock_seguridad_recomendado']:.0f} u.")
+        r2.metric("Utilización esperada", format_percent(selected_stock["Utilizacion_stock"]))
+        r3.metric("Rotación anualizada", f"{best['Rotacion_anualizada']:.1f} veces")
+        r4.metric("Cobertura promedio", f"{best['Dias_cobertura_promedio']:.1f} días")
+
+    with tab_risk:
+        st.markdown("#### Riesgo del stock y cola extrema")
+        q1, q2, q3, q4 = st.columns(4)
+        q1.metric("Probabilidad de quiebre", format_percent(selected_stock["Probabilidad_quiebre"]))
+        q2.metric("Riesgo de sobrestock", format_percent(selected_stock["Probabilidad_sobrestock"]))
+        q3.metric("CV de la demanda", format_percent(selected_stock["CV_demanda_periodo"]))
+        q4.metric("Demanda CVaR 95%", f"{selected_stock['Demanda_CVaR95_periodo']:.0f} u.")
+
+        q5, q6, q7, q8 = st.columns(4)
+        q5.metric("Quiebre con política", format_percent(best["Probabilidad_quiebre_horizonte"]))
+        q6.metric("Escenarios que logran objetivo", format_percent(best["Probabilidad_servicio_objetivo"]))
+        q7.metric("Costo total CVaR 95%", format_currency(best["Costo_total_CVaR95"]))
+        q8.metric("Variabilidad del costo", format_percent(best["CV_costo_total"]))
+
+        risk_view = product_comparison[[
+            "Politica", "Nivel_servicio_unidades", "Probabilidad_quiebre_horizonte",
+            "Dias_sin_quiebre", "Unidades_no_atendidas", "Costo_relevante_VaR95",
+            "Costo_relevante_CVaR95", "CV_costo_total",
+        ]].copy()
+        risk_view["Politica"] = risk_view["Politica"].map(POLICY_LABELS)
+        st.dataframe(
+            risk_view.style.format({
+                "Nivel_servicio_unidades": "{:.2%}",
+                "Probabilidad_quiebre_horizonte": "{:.2%}",
+                "Dias_sin_quiebre": "{:.2%}",
+                "Unidades_no_atendidas": "{:.1f}",
+                "Costo_relevante_VaR95": "S/ {:,.2f}",
+                "Costo_relevante_CVaR95": "S/ {:,.2f}",
+                "CV_costo_total": "{:.2%}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tab_cost:
+        st.markdown("#### Composición del costo esperado")
+        cost_breakdown = product_comparison.set_index("Politica")[[
+            "Costo_mantenimiento_promedio",
+            "Costo_ordenamiento_promedio",
+            "Costo_quiebre_promedio",
+        ]]
+        cost_breakdown.columns = ["Mantenimiento", "Ordenamiento", "Quiebre"]
+        st.bar_chart(cost_breakdown, use_container_width=True)
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Costo por unidad atendida", format_currency(best["Costo_por_unidad_atendida"]))
+        c2.metric("Costo de mantenimiento", format_currency(best["Costo_mantenimiento_promedio"]))
+        c3.metric("Costo de ordenar", format_currency(best["Costo_ordenamiento_promedio"]))
+        c4.metric("Costo de quiebre", format_currency(best["Costo_quiebre_promedio"]))
+
+        policy_view = product_comparison[[
+            "Politica", "Nivel_servicio_unidades", "Inventario_promedio", "Ordenes_promedio",
+            "Rotacion_anualizada", "Dias_cobertura_promedio", "Costo_por_unidad_atendida",
+            "Costo_relevante_promedio", "Costo_total_promedio", "Recomendada",
+        ]].copy()
+        policy_view["Politica"] = policy_view["Politica"].map(POLICY_LABELS)
+        st.dataframe(
+            policy_view.style.format({
+                "Nivel_servicio_unidades": "{:.2%}",
+                "Inventario_promedio": "{:.1f}",
+                "Ordenes_promedio": "{:.1f}",
+                "Rotacion_anualizada": "{:.1f}",
+                "Dias_cobertura_promedio": "{:.1f}",
+                "Costo_por_unidad_atendida": "S/ {:,.2f}",
+                "Costo_relevante_promedio": "S/ {:,.2f}",
+                "Costo_total_promedio": "S/ {:,.2f}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tab_detail:
+        definitions = pd.DataFrame([
+            ("Cobertura del stock", "Probabilidad de que el stock inicial cubra toda la demanda del periodo sin reposición."),
+            ("Fill rate", "Unidades atendidas inmediatamente entre unidades demandadas."),
+            ("VaR 95%", "Umbral de costo o demanda que no se supera en aproximadamente 95% de los escenarios."),
+            ("CVaR 95%", "Promedio de los resultados pertenecientes al 5% de escenarios más adversos."),
+            ("Coeficiente de variación", "Desviación estándar dividida entre el promedio; mide variabilidad relativa."),
+            ("Rotación anualizada", "Unidades atendidas respecto del inventario promedio, convertidas a una base anual."),
+            ("Costo relevante", "Costo de mantenimiento + ordenamiento + quiebre; excluye compras para comparar políticas."),
+            ("Frontera costo–servicio", "Relación entre costo controlable y nivel de servicio de cada política evaluada."),
+        ], columns=["Indicador", "Definición operativa"])
+        st.markdown("#### Definiciones de los indicadores")
+        st.dataframe(definitions, use_container_width=True, hide_index=True)
+
+        st.markdown("#### Resultado completo de validación del stock")
+        stock_view = stock[stock["Producto"] == selected_product]
+        st.dataframe(
+            stock_view.style.format({
+                "Probabilidad_cobertura": "{:.2%}",
+                "Probabilidad_quiebre": "{:.2%}",
+                "Probabilidad_sobrestock": "{:.2%}",
+                "Fill_rate_sin_reposicion": "{:.2%}",
+                "CV_demanda_periodo": "{:.2%}",
+                "Utilizacion_stock": "{:.2%}",
+            }),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     st.download_button(
-        "⬇️ Descargar resultados completos en Excel",
+        "⬇️ Descargar resultados e indicadores avanzados en Excel",
         data=results_to_excel(results, settings),
-        file_name="resultados_montecarlo_inventarios.xlsx",
+        file_name="resultados_avanzados_montecarlo_inventarios.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
