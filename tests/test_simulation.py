@@ -4,6 +4,7 @@ import pandas as pd
 
 from simulation import (
     SimulationSettings,
+    build_demand_scenario_table,
     run_experiment,
     sample_demand,
     validate_determined_stock,
@@ -55,6 +56,16 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(summary["Brecha_stock"], -1)
         self.assertEqual(summary["Evaluacion"], "Insuficiente")
 
+    def test_scenario_detail_reconciles_with_stock_summary(self):
+        row = pd.Series(base_product(Stock_inicial=50, Demanda_desv=1))
+        settings = SimulationSettings(replications=250, protection_days=10, seed=77)
+        summary, _ = validate_determined_stock(row, settings)
+        scenarios = build_demand_scenario_table(row, settings)
+        self.assertEqual(len(scenarios), settings.replications)
+        self.assertAlmostEqual(float(scenarios["Cobertura"].mean()), summary["Probabilidad_cobertura"])
+        self.assertTrue((scenarios["Faltante"] >= 0).all())
+        self.assertTrue((scenarios["Excedente"] >= 0).all())
+
     def test_each_policy_returns_bounded_metrics(self):
         products = pd.DataFrame([base_product()])
         settings = SimulationSettings(horizon_days=30, replications=50, protection_days=10)
@@ -64,6 +75,7 @@ class SimulationTests(unittest.TestCase):
         self.assertTrue(summary["Nivel_servicio_unidades"].between(0, 1).all())
         self.assertTrue(summary["Dias_sin_quiebre"].between(0, 1).all())
         self.assertEqual(int(summary["Recomendada"].sum()), 1)
+        self.assertEqual(len(results["escenarios_demanda"]), settings.replications)
         self.assertTrue(summary["Probabilidad_quiebre_horizonte"].between(0, 1).all())
         self.assertTrue(((summary["Costo_relevante_CVaR95"] + 1e-9) >= summary["Costo_relevante_VaR95"]).all())
         self.assertTrue(((summary["Costo_total_CVaR95"] + 1e-9) >= summary["Costo_total_p95"]).all())
