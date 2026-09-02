@@ -19,6 +19,10 @@ https://simulacion-montecarlo-inventarios-nqrfxjxwbvddkxv8fadftb.streamlit.app/
 - Comparacion de politicas `(Q,s)`, `(T,S)` y `(s,S)`.
 - Nivel de servicio por unidades, dias sin quiebre, inventario promedio,
   unidades no atendidas, numero de ordenes y eventos de quiebre.
+- Dashboard ejecutivo con resumen, riesgo, costos y trazabilidad.
+- Indicadores avanzados: VaR/CVaR 95%, probabilidad de quiebre y sobrestock,
+  coeficiente de variacion, rotacion anualizada, dias de cobertura, costo por
+  unidad atendida y frontera costo-servicio.
 - Costos de mantenimiento, ordenamiento, quiebre, compras y costo total.
 - Recomendacion de la politica de menor costo que cumple el nivel de servicio.
 - Exportacion de todos los resultados a Excel.
