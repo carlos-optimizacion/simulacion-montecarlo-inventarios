@@ -200,13 +200,25 @@ def inventory_chart(trajectories: pd.DataFrame, start_date: date, frequency: str
     frame = trajectories.copy()
     frame["Fecha"] = pd.Timestamp(start_date) + pd.to_timedelta(frame["Dia"] - 1, unit="D")
     if frequency == "Diaria":
-        frame["Periodo"] = frame["Fecha"]
+        frame["Periodo_n"] = frame["Dia"]
+        frame["Periodo"] = (
+            "Día " + frame["Periodo_n"].astype(str).str.zfill(3)
+            + " · " + frame["Fecha"].dt.strftime("%d/%m/%Y")
+        )
     elif frequency == "Semanal":
         frame["Periodo_n"] = ((frame["Dia"] - 1) // 7) + 1
-        frame["Periodo"] = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 7, unit="D")
+        period_date = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 7, unit="D")
+        frame["Periodo"] = (
+            "Sem " + frame["Periodo_n"].astype(str).str.zfill(3)
+            + " · " + period_date.dt.strftime("%d/%m/%Y")
+        )
     else:
         frame["Periodo_n"] = ((frame["Dia"] - 1) // 30) + 1
-        frame["Periodo"] = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 30, unit="D")
+        period_date = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 30, unit="D")
+        frame["Periodo"] = (
+            "Mes " + frame["Periodo_n"].astype(str).str.zfill(2)
+            + " · " + period_date.dt.strftime("%d/%m/%Y")
+        )
     grouped = frame.groupby(["Periodo", "Politica"], sort=False)["Inventario_promedio"].mean().reset_index()
     return grouped.pivot(index="Periodo", columns="Politica", values="Inventario_promedio")
 
