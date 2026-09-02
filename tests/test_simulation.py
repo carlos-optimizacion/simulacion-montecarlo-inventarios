@@ -44,6 +44,8 @@ class SimulationTests(unittest.TestCase):
         self.assertEqual(summary["Stock_recomendado_objetivo"], 50)
         self.assertEqual(summary["Probabilidad_cobertura"], 1.0)
         self.assertEqual(summary["Evaluacion"], "Suficiente")
+        self.assertGreaterEqual(summary["Demanda_CVaR95_periodo"], summary["Demanda_p95_periodo"])
+        self.assertTrue(0 <= summary["Utilizacion_stock"] <= 1)
 
     def test_stock_gap_detects_shortage(self):
         row = pd.Series(base_product(Stock_inicial=49))
@@ -62,6 +64,9 @@ class SimulationTests(unittest.TestCase):
         self.assertTrue(summary["Nivel_servicio_unidades"].between(0, 1).all())
         self.assertTrue(summary["Dias_sin_quiebre"].between(0, 1).all())
         self.assertEqual(int(summary["Recomendada"].sum()), 1)
+        self.assertTrue(summary["Probabilidad_quiebre_horizonte"].between(0, 1).all())
+        self.assertTrue(((summary["Costo_relevante_CVaR95"] + 1e-9) >= summary["Costo_relevante_VaR95"]).all())
+        self.assertTrue(((summary["Costo_total_CVaR95"] + 1e-9) >= summary["Costo_total_p95"]).all())
         calculated = (
             summary["Costo_mantenimiento_promedio"]
             + summary["Costo_ordenamiento_promedio"]
