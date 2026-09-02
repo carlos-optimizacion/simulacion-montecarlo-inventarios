@@ -213,6 +213,12 @@ def validate_determined_stock(
     recommended = int(np.ceil(np.quantile(total, settings.target_probability, method="higher")))
     probability = float(np.mean(total <= stock))
     fill_rate = float(served.sum() / total.sum()) if total.sum() else 1.0
+    demand_mean = float(total.mean())
+    demand_std = float(total.std(ddof=1)) if len(total) > 1 else 0.0
+    demand_var95 = float(np.quantile(total, 0.95, method="higher"))
+    tail_demand = total[total >= demand_var95]
+    demand_cvar95 = float(tail_demand.mean()) if len(tail_demand) else demand_var95
+    utilization = float(served.mean() / stock) if stock > 0 else (1.0 if served.mean() == 0 else 0.0)
     first_stockout = np.where(cumulative > stock, np.arange(1, settings.protection_days + 1), settings.protection_days + 1)
     first_stockout = first_stockout.min(axis=1)
     stockout_mask = first_stockout <= settings.protection_days
@@ -223,10 +229,19 @@ def validate_determined_stock(
         "Producto": product,
         "Stock_evaluado": stock,
         "Probabilidad_cobertura": probability,
+        "Probabilidad_quiebre": 1.0 - probability,
+        "Probabilidad_sobrestock": float(np.mean(total < stock)),
         "Fill_rate_sin_reposicion": fill_rate,
-        "Demanda_promedio_periodo": float(total.mean()),
-        "Demanda_p95_periodo": float(np.quantile(total, 0.95)),
+        "Demanda_promedio_periodo": demand_mean,
+        "Desviacion_demanda_periodo": demand_std,
+        "CV_demanda_periodo": demand_std / demand_mean if demand_mean else 0.0,
+        "Demanda_p95_periodo": demand_var95,
+        "Demanda_CVaR95_periodo": demand_cvar95,
+        "Faltante_esperado": float(shortage.mean()),
+        "Excedente_esperado": float(np.maximum(stock - total, 0).mean()),
+        "Utilizacion_stock": utilization,
         "Stock_recomendado_objetivo": recommended,
+        "Stock_seguridad_recomendado": max(0, recommended - int(np.ceil(demand_mean))),
         "Brecha_stock": stock - recommended,
         "Dia_promedio_quiebre": average_stockout_day,
         "Evaluacion": assessment,
@@ -297,6 +312,8 @@ def simulate_policy(
     order_counts = np.zeros(settings.replications, dtype=float)
     stockout_events = np.zeros(settings.replications, dtype=float)
     lost_units = np.zeros(settings.replications, dtype=float)
+    demand_units = np.zeros(settings.replications, dtype=float)
+    served_units = np.zeros(settings.replications, dtype=float)
 
     unit_cost = float(row["Costo_unitario"])
     order_cost = float(row["Costo_orden"])
@@ -356,12 +373,15 @@ def simulate_policy(
             daily_orders[day] += order_qty
 
         rep_demand = int(all_demand[rep].sum())
+        rep_served = rep_demand - rep_lost
         fill_rates[rep] = 1.0 - (rep_lost / rep_demand) if rep_demand else 1.0
         days_without_stockout[rep] = 1.0 - (rep_stockout_days / settings.horizon_days)
         average_inventories[rep] = inventory_sum / settings.horizon_days
         order_counts[rep] = rep_orders
         stockout_events[rep] = rep_events
         lost_units[rep] = rep_lost
+        demand_units[rep] = rep_demand
+        served_units[rep] = rep_served
         relevant_costs[rep] = rep_holding + rep_shortage + rep_ordering
         total_costs[rep] = relevant_costs[rep] + rep_purchase
         holding_costs[rep] = rep_holding
@@ -379,22 +399,49 @@ def simulate_policy(
     trajectory.insert(0, "Politica", policy)
     trajectory.insert(0, "Producto", product)
 
+    total_cost_var95 = float(np.quantile(total_costs, 0.95))
+    total_cost_tail = total_costs[total_costs >= total_cost_var95]
+    relevant_cost_var95 = float(np.quantile(relevant_costs, 0.95))
+    relevant_cost_tail = relevant_costs[relevant_costs >= relevant_cost_var95]
+    average_inventory = float(average_inventories.mean())
+    average_served = float(served_units.mean())
+    average_demand = float(demand_units.mean())
+    average_relevant_cost = float(relevant_costs.mean())
+    cost_per_served = average_relevant_cost / average_served if average_served else np.nan
+    annualized_turnover = (
+        (average_served / average_inventory) * (365.0 / settings.horizon_days)
+        if average_inventory > 0 else np.nan
+    )
+    demand_per_day = average_demand / settings.horizon_days
+    days_of_supply = average_inventory / demand_per_day if demand_per_day > 0 else np.nan
+
     summary: dict[str, float | str] = {
         "Producto": product,
         "Politica": policy,
         "Nivel_servicio_unidades": float(fill_rates.mean()),
+        "Brecha_nivel_servicio": float(fill_rates.mean()) - settings.target_probability,
         "Dias_sin_quiebre": float(days_without_stockout.mean()),
-        "Inventario_promedio": float(average_inventories.mean()),
+        "Probabilidad_quiebre_horizonte": float(np.mean(lost_units > 0)),
+        "Inventario_promedio": average_inventory,
+        "Demanda_promedio_horizonte": average_demand,
+        "Unidades_atendidas": average_served,
         "Unidades_no_atendidas": float(lost_units.mean()),
         "Eventos_quiebre": float(stockout_events.mean()),
         "Ordenes_promedio": float(order_counts.mean()),
+        "Rotacion_anualizada": annualized_turnover,
+        "Dias_cobertura_promedio": days_of_supply,
         "Costo_mantenimiento_promedio": float(holding_costs.mean()),
         "Costo_ordenamiento_promedio": float(ordering_costs.mean()),
         "Costo_quiebre_promedio": float(shortage_costs.mean()),
         "Costo_compras_promedio": float(purchase_costs.mean()),
-        "Costo_relevante_promedio": float(relevant_costs.mean()),
+        "Costo_relevante_promedio": average_relevant_cost,
+        "Costo_relevante_VaR95": relevant_cost_var95,
+        "Costo_relevante_CVaR95": float(relevant_cost_tail.mean()) if len(relevant_cost_tail) else relevant_cost_var95,
+        "Costo_por_unidad_atendida": cost_per_served,
         "Costo_total_promedio": float(total_costs.mean()),
-        "Costo_total_p95": float(np.quantile(total_costs, 0.95)),
+        "Costo_total_p95": total_cost_var95,
+        "Costo_total_CVaR95": float(total_cost_tail.mean()) if len(total_cost_tail) else total_cost_var95,
+        "CV_costo_total": float(total_costs.std(ddof=1) / total_costs.mean()) if total_costs.mean() else 0.0,
         "Probabilidad_servicio_objetivo": float(np.mean(fill_rates >= settings.target_probability)),
     }
     return summary, trajectory
