@@ -257,6 +257,48 @@ def validate_determined_stock(
     return summary, percentile_table
 
 
+def build_demand_scenario_table(
+    row: Mapping[str, object],
+    settings: SimulationSettings,
+    historical: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Devuelve el detalle auditable de cada escenario de demanda.
+
+    Usa la misma semilla estable que la validación de stock, por lo que los
+    totales y probabilidades coinciden exactamente con el resumen ejecutivo.
+    """
+    product = str(row["Producto"]).strip()
+    rng = np.random.default_rng(_stable_seed(settings.seed, product, "stock"))
+    history = _historical_values(product, historical)
+    demand = sample_demand(
+        row,
+        rng,
+        (settings.replications, settings.protection_days),
+        history,
+    )
+    cumulative = demand.cumsum(axis=1)
+    total = cumulative[:, -1]
+    stock = int(round(float(row["Stock_inicial"])))
+    shortage = np.maximum(total - stock, 0)
+    surplus = np.maximum(stock - total, 0)
+    first_stockout = np.where(
+        cumulative > stock,
+        np.arange(1, settings.protection_days + 1),
+        settings.protection_days + 1,
+    ).min(axis=1)
+
+    return pd.DataFrame({
+        "Producto": product,
+        "Iteracion": np.arange(1, settings.replications + 1),
+        "Demanda_acumulada": total,
+        "Stock_evaluado": stock,
+        "Cobertura": total <= stock,
+        "Faltante": shortage,
+        "Excedente": surplus,
+        "Dia_quiebre": np.where(first_stockout <= settings.protection_days, first_stockout, np.nan),
+    })
+
+
 def _order_quantity(policy: str, day: int, inventory_position: float, row: Mapping[str, object]) -> int:
     q = int(round(float(row["Q"])))
     reorder_point = float(row["s"])
@@ -457,11 +499,13 @@ def run_experiment(
     percentile_tables: list[pd.DataFrame] = []
     policy_summaries: list[dict[str, float | str]] = []
     trajectories: list[pd.DataFrame] = []
+    demand_scenarios: list[pd.DataFrame] = []
 
     for _, row in products.iterrows():
         stock_summary, percentiles = validate_determined_stock(row, settings, historical)
         stock_summaries.append(stock_summary)
         percentile_tables.append(percentiles)
+        demand_scenarios.append(build_demand_scenario_table(row, settings, historical))
         for policy in policies:
             policy_summary, trajectory = simulate_policy(row, policy, settings, historical)
             policy_summaries.append(policy_summary)
@@ -486,4 +530,5 @@ def run_experiment(
         "percentiles_demanda": pd.concat(percentile_tables, ignore_index=True) if percentile_tables else pd.DataFrame(),
         "comparacion_politicas": policies_df,
         "trayectorias": pd.concat(trajectories, ignore_index=True) if trajectories else pd.DataFrame(),
+        "escenarios_demanda": pd.concat(demand_scenarios, ignore_index=True) if demand_scenarios else pd.DataFrame(),
     }
