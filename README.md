@@ -4,6 +4,12 @@ Aplicacion en Streamlit para comprobar si un stock determinado puede soportar
 la variabilidad de la demanda y comparar politicas de reposicion bajo demanda y
 lead time estocasticos.
 
+## Aplicacion publicada
+
+Use la aplicacion en:
+
+https://simulacion-montecarlo-inventarios-nqrfxjxwbvddkxv8fadftb.streamlit.app/
+
 ## Funciones
 
 - Ingreso manual de uno o varios productos.
@@ -70,4 +76,3 @@ costo total tambien incorpora las compras realizadas durante el horizonte.
 - El lead time sigue una Normal truncada a un minimo de un dia.
 - La posicion de inventario es inventario disponible mas inventario en transito.
 - Los resultados representan promedios de multiples repeticiones Monte Carlo.
-
