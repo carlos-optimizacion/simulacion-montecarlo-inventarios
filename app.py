@@ -385,7 +385,7 @@ if "results" in st.session_state:
     k2.metric(
         "Stock requerido",
         f"{selected_stock['Stock_recomendado_objetivo']:.0f} u.",
-        delta=f"Brecha {selected_stock['Brecha_stock']:+.0f} u.",
+        delta=f"{selected_stock['Brecha_stock']:+.0f} u. vs requerido",
         delta_color="normal",
     )
     k3.metric(
