@@ -14,6 +14,12 @@ https://simulacion-montecarlo-inventarios-nqrfxjxwbvddkxv8fadftb.streamlit.app/
 
 - Ingreso manual de uno o varios productos.
 - Importacion desde Excel mediante una plantilla descargable.
+- Navegacion independiente en cuatro hojas: datos, simulacion Monte Carlo,
+  politicas y costos, y dashboard ejecutivo.
+- Horizonte configurable por fecha de inicio, duracion y unidad de tiempo
+  (dias, semanas o meses), con visualizacion diaria, semanal o mensual.
+- Medicion del tiempo real de ejecucion, separado del horizonte simulado y del
+  numero de iteraciones.
 - Demanda Normal, Poisson, Triangular o empirica/historica.
 - Validacion probabilistica del stock durante un periodo de proteccion.
 - Comparacion de politicas `(Q,s)`, `(T,S)` y `(s,S)`.
@@ -26,6 +32,8 @@ https://simulacion-montecarlo-inventarios-nqrfxjxwbvddkxv8fadftb.streamlit.app/
 - Costos de mantenimiento, ordenamiento, quiebre, compras y costo total.
 - Recomendacion de la politica de menor costo que cumple el nivel de servicio.
 - Exportacion de todos los resultados a Excel.
+- Tabla auditable de escenarios con demanda acumulada, cobertura, faltante,
+  excedente y dia de quiebre por iteracion.
 
 ## Ejecucion local
 
