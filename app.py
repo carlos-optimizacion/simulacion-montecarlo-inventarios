@@ -200,13 +200,13 @@ def inventory_chart(trajectories: pd.DataFrame, start_date: date, frequency: str
     frame = trajectories.copy()
     frame["Fecha"] = pd.Timestamp(start_date) + pd.to_timedelta(frame["Dia"] - 1, unit="D")
     if frequency == "Diaria":
-        frame["Periodo"] = frame["Fecha"].dt.strftime("%d/%m/%Y")
+        frame["Periodo"] = frame["Fecha"]
     elif frequency == "Semanal":
         frame["Periodo_n"] = ((frame["Dia"] - 1) // 7) + 1
-        frame["Periodo"] = "Semana " + frame["Periodo_n"].astype(str)
+        frame["Periodo"] = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 7, unit="D")
     else:
         frame["Periodo_n"] = ((frame["Dia"] - 1) // 30) + 1
-        frame["Periodo"] = "Mes " + frame["Periodo_n"].astype(str)
+        frame["Periodo"] = pd.Timestamp(start_date) + pd.to_timedelta((frame["Periodo_n"] - 1) * 30, unit="D")
     grouped = frame.groupby(["Periodo", "Politica"], sort=False)["Inventario_promedio"].mean().reset_index()
     return grouped.pivot(index="Periodo", columns="Politica", values="Inventario_promedio")
 
@@ -335,7 +335,12 @@ def render_simulation_page() -> None:
             key=f"sim_duration_{unit}",
         )
     with t4:
-        frequency = st.selectbox("Visualización", ["Diaria", "Semanal", "Mensual"], key="sim_frequency")
+        frequency_options = ["Diaria", "Semanal", "Mensual"]
+        frequency = st.selectbox(
+            "Visualización", frequency_options,
+            index={"Días": 0, "Semanas": 1, "Meses": 2}[unit],
+            key=f"sim_frequency_{unit}",
+        )
 
     horizon_days = duration_to_days(int(duration), unit)
     end_date = start_date + timedelta(days=horizon_days - 1)
@@ -426,6 +431,7 @@ def render_simulation_page() -> None:
         st.caption("El percentil objetivo determina el stock requerido durante el periodo de protección.")
 
     st.markdown(f"#### Evolución del inventario durante {period['duration']} {str(period['unit']).lower()}")
+    st.caption(f"Frecuencia mostrada: {period['frequency'].lower()}.")
     trajectories = results["trayectorias"]
     trajectories = trajectories[trajectories["Producto"] == selected_product]
     chart = inventory_chart(trajectories, period["start_date"], str(period["frequency"]))
